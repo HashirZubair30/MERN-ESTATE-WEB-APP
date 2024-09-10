@@ -1,64 +1,85 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+
 
 export default function SignUp() {
+  const [formData, setFormData] = useState({});
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.id]: e.target.value,
+    });
+  };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      console.log(data);
+      if (data.success === false) {
+        setLoading(false);
+        setError(data.message);
+        return;
+      }
+      setLoading(false);
+      setError(null);
+      navigate('/sign-in');
+    } catch (error) {
+      setLoading(false);
+      setError(error.message);
+    }
+  };
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
-        <h2 className="text-3xl font-bold text-center text-gray-800 mb-6">Sign Up</h2>
-        <form className="space-y-6">
-          {/* Username Input */}
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
-            <input
-              type="text"
-              id="username"
-              className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Enter your username"
-            />
-          </div>
+    <div className='p-3 max-w-lg mx-auto'>
+      <h1 className='text-3xl text-center font-semibold my-7'>Sign Up</h1>
+      <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
+        <input
+          type='text'
+          placeholder='username'
+          className='border p-3 rounded-lg'
+          id='username'
+          onChange={handleChange}
+        />
+        <input
+          type='email'
+          placeholder='email'
+          className='border p-3 rounded-lg'
+          id='email'
+          onChange={handleChange}
+        />
+        <input
+          type='password'
+          placeholder='password'
+          className='border p-3 rounded-lg'
+          id='password'
+          onChange={handleChange}
+        />
 
-          {/* Email Input */}
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
-            <input
-              type="email"
-              id="email"
-              className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Enter your email"
-            />
-          </div>
-
-          {/* Password Input */}
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
-            <input
-              type="password"
-              id="password"
-              className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Enter your password"
-            />
-          </div>
-
-          {/* Submit Button */}
-          <div>
-            <button
-              type="submit"
-              className="w-full py-3 bg-indigo-600 text-white font-bold uppercase rounded-lg shadow-lg hover:bg-indigo-700 transition-all duration-300"
-            >
-              Sign Up
-            </button>
-          </div>
-        </form>
-
-        {/* Sign In Link */}
-        <p className="mt-4 text-center text-sm text-gray-600">
-          Already have an account?{' '}
-          <Link to="/sign-in" className="text-indigo-600 hover:underline">
-            Sign In
-          </Link>
-        </p>
+        <button
+          disabled={loading}
+          className='bg-slate-700 text-white p-3 rounded-lg uppercase hover:opacity-95 disabled:opacity-80'
+        >
+          {loading ? 'Loading...' : 'Sign Up'}
+        </button>
+        
+      </form>
+      <div className='flex gap-2 mt-5'>
+        <p>Have an account?</p>
+        <Link to={'/sign-in'}>
+          <span className='text-blue-700'>Sign in</span>
+        </Link>
       </div>
+      {error && <p className='text-red-500 mt-5'>{error}</p>}
     </div>
   );
 }
