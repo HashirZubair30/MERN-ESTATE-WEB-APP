@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import {
   getDownloadURL,
   getStorage,
@@ -7,6 +7,13 @@ import {
   uploadBytesResumable,
 } from 'firebase/storage';
 import { app } from '../firebase'; // Ensure firebase app is correctly imported
+import { 
+  updateUserStart, updateUserSuccess, updateUserFailure,
+  deleteUserFailure, deleteUserStart, deleteUserSuccess,
+  signOutUserStart, signOutUserSuccess, signOutUserFailure 
+} from '../redux/user/userSlice';
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
+import { Link } from 'react-router-dom'; // Import Link
 
 export default function Profile() {
   const fileRef = useRef(null);
@@ -20,6 +27,11 @@ export default function Profile() {
     password: '',
     avatar: currentUser?.avatar || '',
   });
+  const dispatch = useDispatch();
+  const navigate = useNavigate(); // Initialize useNavigate
+  const [updateSuccess, setUpdateSuccess] = useState(false);
+  const [showListingsError,setshowListingsError]=useState(false);
+  const [userListings,setUserListings]=useState([]);
 
   useEffect(() => {
     if (file) {
@@ -36,8 +48,7 @@ export default function Profile() {
     uploadTask.on(
       'state_changed',
       (snapshot) => {
-        const progress =
-          (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
         setFilePerc(Math.round(progress));
       },
       (error) => {
@@ -45,7 +56,6 @@ export default function Profile() {
       },
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          // Safely update the formData state with the new avatar URL
           setFormData((prevState) => ({ ...prevState, avatar: downloadURL }));
           setFilePerc(0); // Reset upload progress after completion
         });
@@ -60,26 +70,65 @@ export default function Profile() {
     });
   };
 
-  const handleUpdate = async () => {
-    // Simulate an API call to save user profile, including the avatar URL
-    console.log('Update Profile:', formData);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      dispatch(updateUserStart());
+      const res = await fetch(`/api/user/update/${currentUser._id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (data.success === false) {
+        dispatch(updateUserFailure(data.message));
+        return;
+      }
 
-    // Here you would make an API call to save the updated profile to your backend.
-    // Example: await api.updateUserProfile(currentUser.id, formData);
+      dispatch(updateUserSuccess(data));
+      setUpdateSuccess(true);
+    } catch (error) {
+      dispatch(updateUserFailure(error.message));
+    }
   };
 
-  const handleDeleteAccount = () => {
-    // Handle delete account logic here
-    console.log('Delete Account');
+  const handleDeleteUser = async () => {
+    try {
+      dispatch(deleteUserStart());
+      const res = await fetch(`/api/user/delete/${currentUser._id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (data.success === false) {
+        dispatch(deleteUserFailure(data.message));
+        return;
+      }
+      dispatch(deleteUserSuccess(data));
+      navigate('/sign-in'); // Redirect to sign-in after account deletion
+    } catch (error) {
+      dispatch(deleteUserFailure(error.message));
+    }
   };
 
-  const handleLogout = () => {
-    // Handle logout logic here
-    console.log('Logout');
+  const handleSignOut = async () => {
+    try {
+      dispatch(signOutUserStart());
+      const res = await fetch('/api/auth/signout');
+      const data = await res.json();
+      if (data.success === false) {
+        dispatch(signOutUserFailure(data.message));
+        return;
+      }
+      dispatch(signOutUserSuccess(data));
+      navigate('/sign-in'); // Redirect to sign-in after logout
+    } catch (error) {
+      dispatch(signOutUserFailure(error.message));
+    }
   };
 
   useEffect(() => {
-    // Fetch current user data on load to ensure data is available after refresh
     if (currentUser) {
       setFormData({
         username: currentUser.username,
@@ -89,6 +138,39 @@ export default function Profile() {
       });
     }
   }, [currentUser]);
+
+
+
+  const handleShowListings=async()=>{
+    try {
+      const res=await fetch(`/api/user/listings/${currentUser._id}`);
+      const data=await res.json();
+      if(data.success===false){
+        setshowListingsError(true);
+        return;
+      }
+      setUserListings(data);
+    } catch (error) {
+      setshowListingsError(true);
+    }
+  }
+
+
+  const handleListingDelete=async(listingId)=>{
+    try {
+     const res=await fetch(`/api/listing/delete/${listingId}`,{
+      method:'DELETE',
+     }) 
+     const data=await res.json();
+     if(data.success===false){
+      console.log(data.message);
+      return;
+     }
+     setUserListings((prev)=>prev.filter((listing)=>listing._id !==listingId));
+    } catch (error) {
+      console.log(error.message)
+    }
+  }
 
   return (
     <div className="max-w-lg mx-auto mt-10 bg-white p-8 shadow-md rounded-lg">
@@ -136,7 +218,7 @@ export default function Profile() {
         )}
       </p>
 
-      <form className="space-y-4">
+      <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
           <label
             htmlFor="username"
@@ -192,28 +274,90 @@ export default function Profile() {
         </div>
 
         <button
-          type="button"
-          onClick={handleUpdate}
+          type="submit"
           className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-200"
         >
           Update
         </button>
       </form>
 
+      {/* Add button with navigation to create listing page */}
+      <div className="mt-6">
+        <Link to="/create-Listing">
+          <button className="w-full bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 focus:outline-none focus:ring focus:ring-green-200">
+            Go to Create Listing
+          </button>
+        </Link>
+      </div>
+
       <div className="flex justify-between items-center mt-6">
         <button
-          onClick={handleDeleteAccount}
+          onClick={handleDeleteUser}
           className="bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 focus:outline-none focus:ring focus:ring-red-200"
         >
           Delete Account
         </button>
         <button
-          onClick={handleLogout}
+          onClick={handleSignOut}
           className="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 focus:outline-none focus:ring focus:ring-gray-200"
         >
-          Logout
+          Sign Out
         </button>
       </div>
+
+
+
+      {updateSuccess && (
+        <p className="text-green-500 mt-4 text-center">
+          Profile updated successfully!
+        </p>
+      )}
+      <button onClick={handleShowListings} className='text-green-700 w-full'>Show Listings</button>
+      <p className='text-red-700 mt-5'>
+        {showListingsError ? 'Error showing listings' : ''}
+      </p>
+         {userListings && userListings.length > 0 && (
+        <div className='flex flex-col gap-4'>
+          <h1 className='text-center mt-7 text-2xl font-semibold'>
+            Your Listings
+          </h1>
+          {userListings.map((listing) => (
+            <div
+              key={listing._id}
+              className='border rounded-lg p-3 flex justify-between items-center gap-4'
+            >
+              <Link to={`/listing/${listing._id}`}>
+                <img
+                  src={listing.imageUrls[0]}
+                  alt='listing cover'
+                  className='h-16 w-16 object-contain'
+                />
+              </Link>
+              <Link
+                className='text-slate-700 font-semibold  hover:underline truncate flex-1'
+                to={`/listing/${listing._id}`}
+              >
+                <p>{listing.name}</p>
+              </Link>
+
+              <div className='flex flex-col item-center'>
+                <button
+                  onClick={() => handleListingDelete(listing._id)}
+                  className='text-red-700 uppercase'
+                >
+                  Delete
+                </button>
+                <Link to={`/update-listing/${listing._id}`}>
+                  <button className='text-green-700 uppercase'>Edit</button>
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+
+
     </div>
   );
 }
